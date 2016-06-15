@@ -38,7 +38,7 @@ ADD Dockerfile /Dockerfile
 
 # revision.txt is dynamically updated by the CI for every build,
 # to ensure the statements below this point are executed every time
-ADD docker/revision.txt /revision.txt
+ADD revision.txt /revision.txt
 
 RUN mkdir -p /rp && virtualenv -p python3 /rp/env
 ADD . /rp/src
