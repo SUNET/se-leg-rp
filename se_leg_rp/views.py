@@ -104,8 +104,7 @@ def get_state(**kwargs):
         # Initiate proofing
         args = {
             'client_id': current_app.oidc_client.client_id,
-            'response_type': 'code id_token token',
-            'response_mode': 'query',
+            'response_type': 'code',
             'scope': ['openid'],
             'redirect_uri': url_for('se_leg_rp.authorization_response', _external=True),
             'state': state,
