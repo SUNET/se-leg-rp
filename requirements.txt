@@ -1,5 +1,5 @@
 -i https://pypi.nordu.net/simple
-Flask==0.10.1
+Flask<0.12
 eduid-userdb>=0.2.3b0
 flask-apispec>=0.3.2
 oic==0.8.3
