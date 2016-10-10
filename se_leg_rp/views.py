@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from flask import request, url_for, make_response
+from flask import request, make_response
 from flask import current_app, Blueprint
 from flask_apispec import use_kwargs, marshal_with
 from oic.oic.message import AuthorizationResponse, ClaimsRequest, Claims
@@ -49,10 +49,11 @@ def authorization_response():
         raise ApiException(payload={'error': msg})
     current_app.logger.debug('Proofing state {!s} for user {!s} found'.format(proofing_state.state,
                                                                               proofing_state.eppn))
+
     # do token request
     args = {
         'code': authn_resp['code'],
-        'redirect_uri': url_for('se_leg_rp.authorization_response', _external=True)
+        'redirect_uri': current_app.config['AUTHORIZATION_RESPONSE_URI']
     }
     current_app.logger.debug('Trying to do token request: {!s}'.format(args))
     token_resp = current_app.oidc_client.do_access_token_request(scope='openid', state=authn_resp['state'],
@@ -106,7 +107,7 @@ def get_state(**kwargs):
             'client_id': current_app.oidc_client.client_id,
             'response_type': 'code',
             'scope': ['openid'],
-            'redirect_uri': url_for('se_leg_rp.authorization_response', _external=True),
+            'redirect_uri': current_app.config['AUTHORIZATION_RESPONSE_URI'],
             'state': state,
             'nonce': nonce,
             'claims': ClaimsRequest(userinfo=Claims(identity=None)).to_json()

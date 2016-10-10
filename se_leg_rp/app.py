@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from flask import Flask
+from flask import Flask, url_for
+from werkzeug.contrib.fixers import ProxyFix
 from requests.exceptions import ConnectionError
 from oic.oic import Client
 from oic.oic.message import RegistrationRequest
@@ -18,6 +19,8 @@ SE_LEG_RP_SETTINGS_ENVVAR = 'SE_LEG_RP_SETTINGS'
 
 def init_oidc_client(app):
     oidc_client = Client(client_authn_method=CLIENT_AUTHN_METHOD)
+    with app.app_context():
+        app.config['AUTHORIZATION_RESPONSE_URI'] = url_for('se_leg_rp.authorization_response')
     oidc_client.store_registration_info(RegistrationRequest(**app.config['CLIENT_REGISTRATION_INFO']))
     provider = app.config['PROVIDER_CONFIGURATION_INFO']['issuer']
     try:
@@ -72,6 +75,7 @@ def se_leg_rp_init_app(name, config):
     app.config.update(config)
 
     # Initialize helpers
+    app.wsgi_app = ProxyFix(app.wsgi_app)
     app = init_exception_handlers(app)
     app = init_logging(app)
 
