@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import json
 
 from flask import request, make_response
 from flask import current_app, Blueprint
@@ -49,6 +50,12 @@ def authorization_response():
         raise ApiException(payload={'error': msg})
     current_app.logger.debug('Proofing state {!s} for user {!s} found'.format(proofing_state.state,
                                                                               proofing_state.eppn))
+
+    authorization_header = request.headers.get('Authorization')
+    if authorization_header != 'Bearer {}'.format(proofing_state.token):
+        msg = 'The authorization token ({!s}) did not match the expected .'.format(authorization_header)
+        current_app.logger.error(msg)
+        raise ApiException(payload={'error': msg})
 
     # do token request
     args = {
@@ -101,7 +108,9 @@ def get_state(**kwargs):
         current_app.logger.debug('No proofing state found, initializing new proofing flow.'.format(eppn))
         state = get_unique_hash()
         nonce = get_unique_hash()
-        proofing_state = OidcProofingState({'eduPersonPrincipalName': eppn, 'state': state, 'nonce': nonce})
+        token = get_unique_hash()
+        proofing_state = OidcProofingState({'eduPersonPrincipalName': eppn, 'state': state, 'nonce': nonce,
+                                            'token': token})
         # Initiate proofing
         args = {
             'client_id': current_app.oidc_client.client_id,
@@ -132,10 +141,11 @@ def get_state(**kwargs):
     # Return nonce and nonce as qr code
     current_app.logger.debug('Returning nonce for user {!s}'.format(eppn))
     buf = BytesIO()
-    qrcode.make(proofing_state.nonce).save(buf)
+    qr_code = '1' + json.dumps({'nonce': proofing_state.nonce, 'token': proofing_state.token})
+    qrcode.make(qr_code).save(buf)
     qr_b64 = base64.b64encode(buf.getvalue()).decode()
     ret = {
-        'nonce': proofing_state.nonce,
+        'qr_code': qr_code,
         'qr_img': '<img src="data:image/png;base64, {!s}"/>'.format(qr_b64),
     }
     return ret

@@ -20,7 +20,7 @@ class NonceResponseSchema(Schema):
     class Meta:
         strict = True
 
-    nonce = fields.String(required=True)
+    qr_code = fields.String(required=True)
     qr_img = fields.String(required=True)
 
 
