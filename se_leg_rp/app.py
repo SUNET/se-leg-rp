@@ -20,7 +20,7 @@ SE_LEG_RP_SETTINGS_ENVVAR = 'SE_LEG_RP_SETTINGS'
 def init_oidc_client(app):
     oidc_client = Client(client_authn_method=CLIENT_AUTHN_METHOD)
     with app.app_context():
-        app.config['AUTHORIZATION_RESPONSE_URI'] = url_for('se_leg_rp.authorization_response')
+        app.config['AUTHORIZATION_RESPONSE_URI'] = url_for('vetting.authorization_response')
     oidc_client.store_registration_info(RegistrationRequest(**app.config['CLIENT_REGISTRATION_INFO']))
     provider = app.config['PROVIDER_CONFIGURATION_INFO']['issuer']
     try:
@@ -79,8 +79,18 @@ def se_leg_rp_init_app(name, config):
     app = init_exception_handlers(app)
     app = init_logging(app)
 
-    from .views import se_leg_rp_views
-    app.register_blueprint(se_leg_rp_views)
+    from .views import rp_views
+    app.register_blueprint(rp_views)
+
+    # TODO: Try flask-registry for this
+    if app.config['VETTING_METHOD'] == 'se-leg':
+        from .se_leg_views.views import se_leg_views
+        app.register_blueprint(se_leg_views)
+    elif app.config['VETTING_METHOD'] == 'nstic':
+        from .nstic_views.views import nstic_views
+        app.register_blueprint(nstic_views)
+    else:
+        raise NotImplementedError('Please set VETTING_METHOD in config.')
 
     # Initialize the oidc_client after views to be able to set correct redirect_uris
     app.oidc_client = init_oidc_client(app)
