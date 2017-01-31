@@ -119,7 +119,7 @@ def get_state(**kwargs):
             'state': state,
             'nonce': nonce,
             'token': token,
-            'claims': ClaimsRequest(userinfo=Claims(data=None)).to_json()
+            'claims': ClaimsRequest(userinfo=Claims(vetting_results=None)).to_json()
         }
         current_app.logger.debug('AuthenticationRequest args:')
         current_app.logger.debug(args)
