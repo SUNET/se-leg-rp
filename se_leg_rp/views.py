@@ -33,20 +33,22 @@ def refresh_access_token(**kwargs):
     args = {
         'refresh_token': proof_data[0].token_resp['refresh_token']
     }
-    new_refresh_token = uuid.uuid4().hex
-    response = current_app.oidc_client.do_access_token_refresh(method=current_app.config['USERINFO_ENDPOINT_METHOD'],
+    response = current_app.oidc_client.do_access_token_refresh(method=current_app.config['REFRESH_TOKEN_ENDPOINT_METHOD'],
                                                                state=proofing_state.state,
-                                                               token=new_refresh_token,
+                                                               token=None,
                                                                request_args=args,
                                                                authn_method='client_secret_basic')
     proof = proof_data[0]
-    current_app.logger.debug(response)
+    current_app.logger.debug('Refresh access token response: {}'.format(response))
     proof.token_resp.update({
             'token_type': response['token_type'],
             'access_token': response['access_token'],
-            'refresh_token': new_refresh_token
          }
     )
+    # A new refresh token is only supplied if the the OP has a set lifetime for refresh tokens
+    if 'refresh_token' in response:
+        proof.token_resp['refresh_token'] = response['refresh_token']
+
     current_app.proofdb.save(proof)
     return make_response('OK', 200)
 
