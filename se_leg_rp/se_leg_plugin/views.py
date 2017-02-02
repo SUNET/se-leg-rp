@@ -11,7 +11,6 @@ import qrcode
 import qrcode.image.svg
 from io import BytesIO
 import base64
-
 from se_leg_rp.utils import get_unique_hash
 from se_leg_rp.exceptions import ApiException
 from eduid_userdb.proofing import OidcProofingState
@@ -25,10 +24,13 @@ __author__ = 'lundberg'
 OIDC code very inspired by https://github.com/its-dirg/Flask-pyoidc
 """
 
-nstic_views = Blueprint('vetting', __name__, url_prefix='')
+se_leg_views = Blueprint('vetting', __name__, url_prefix='')
+
+# flask-registry hook
+blueprints = [se_leg_views]
 
 
-@nstic_views.route('/authorization-response')
+@se_leg_views.route('/authorization-response')
 def authorization_response():
     # parse authentication response
     query_string = request.query_string.decode('utf-8')
@@ -93,10 +95,12 @@ def authorization_response():
 
     current_app.proofdb.save(Proof(data=proof_data))
 
+    # Remove users proofing state
+    current_app.proofing_statedb.remove_state(proofing_state)
     return make_response('OK', 200)
 
 
-@nstic_views.route('/get-state', methods=['POST'])
+@se_leg_views.route('/get-state', methods=['POST'])
 @use_kwargs(schemas.EppnRequestSchema)
 @marshal_with(schemas.NonceResponseSchema)
 def get_state(**kwargs):
@@ -118,8 +122,7 @@ def get_state(**kwargs):
             'redirect_uri': current_app.config['AUTHORIZATION_RESPONSE_URI'],
             'state': state,
             'nonce': nonce,
-            'token': token,
-            'claims': ClaimsRequest(userinfo=Claims(vetting_results=None)).to_json()
+            'claims': ClaimsRequest(userinfo=Claims(identity=None)).to_json()
         }
         current_app.logger.debug('AuthenticationRequest args:')
         current_app.logger.debug(args)

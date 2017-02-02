@@ -170,5 +170,13 @@ CLIENT_REGISTRATION_INFO = {
 PROVIDER_CONFIGURATION_INFO = {
     'issuer': 'can_not_be_empty_string',
 }
-USERINFO_ENDPOINT_METHOD = 'POST'
 
+USERINFO_ENDPOINT_METHOD = 'POST'
+REFRESH_TOKEN_ENDPOINT_METHOD = 'POST'
+
+# ================#
+# se-leg-rp       #
+# ================#
+
+# In which plugin package to find views
+PACKAGES = []
