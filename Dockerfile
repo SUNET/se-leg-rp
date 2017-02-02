@@ -43,6 +43,7 @@ ADD revision.txt /revision.txt
 RUN mkdir -p /rp && virtualenv -p python3 /rp/env
 ADD . /rp/src
 RUN cd /rp/src && \
+    /rp/env/bin/pip install -U pip && \
     /rp/env/bin/pip install -r requirements.txt && \
     /rp/env/bin/pip install gunicorn
 
