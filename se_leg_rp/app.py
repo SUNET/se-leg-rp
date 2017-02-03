@@ -2,12 +2,15 @@
 
 from flask import Flask, url_for
 from werkzeug.contrib.fixers import ProxyFix
+from werkzeug.routing import BuildError
 from requests.exceptions import ConnectionError
+import logging
+import sys
 from oic.oic import Client
 from oic.oic.message import RegistrationRequest
 from oic.utils.authn.client import CLIENT_AUTHN_METHOD
-import logging
-import sys
+from flask_registry import BlueprintAutoDiscoveryRegistry, ConfigurationRegistry
+from flask_registry import ExtensionRegistry, PackageRegistry, Registry
 
 from se_leg_rp.db import ProofDB, OidcProofingStateDB
 from se_leg_rp.exceptions import init_exception_handlers
@@ -20,7 +23,11 @@ SE_LEG_RP_SETTINGS_ENVVAR = 'SE_LEG_RP_SETTINGS'
 def init_oidc_client(app):
     oidc_client = Client(client_authn_method=CLIENT_AUTHN_METHOD)
     with app.app_context():
-        app.config['AUTHORIZATION_RESPONSE_URI'] = url_for('se_leg_rp.authorization_response')
+        try:
+            app.config['AUTHORIZATION_RESPONSE_URI'] = url_for('vetting.authorization_response')
+        except BuildError as e:
+            app.logger.error('View vetting.authorization_response needs to be loaded or implemented.')
+            raise e
     oidc_client.store_registration_info(RegistrationRequest(**app.config['CLIENT_REGISTRATION_INFO']))
     provider = app.config['PROVIDER_CONFIGURATION_INFO']['issuer']
     try:
@@ -78,9 +85,24 @@ def se_leg_rp_init_app(name, config):
     app.wsgi_app = ProxyFix(app.wsgi_app)
     app = init_exception_handlers(app)
     app = init_logging(app)
+    r = Registry(app=app)
+    r['packages'] = PackageRegistry(app)
+    r['extensions'] = ExtensionRegistry(app)
+    r['config'] = ConfigurationRegistry(app)
+    r['blueprints'] = BlueprintAutoDiscoveryRegistry(app=app)
 
-    from .views import se_leg_rp_views
-    app.register_blueprint(se_leg_rp_views)
+    from .views import rp_views
+    app.register_blueprint(rp_views)
+
+    # # TODO: Try flask-registry for this
+    # if app.config['VETTING_METHOD'] == 'se-leg':
+    #     from .se_leg_views.views import se_leg_views
+    #     app.register_blueprint(se_leg_views)
+    # elif app.config['VETTING_METHOD'] == 'nstic':
+    #     from .nstic_views.views import nstic_views
+    #     app.register_blueprint(nstic_views)
+    # else:
+    #     raise NotImplementedError('Please set VETTING_METHOD in config.')
 
     # Initialize the oidc_client after views to be able to set correct redirect_uris
     app.oidc_client = init_oidc_client(app)

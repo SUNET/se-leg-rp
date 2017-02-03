@@ -28,3 +28,8 @@ class NonceResponseSchema(Schema):
 class ProofResponseSchema(Schema):
 
     proofs = fields.List(fields.Dict)
+
+
+class UserinfoResponseSchema(Schema):
+
+    userinfo = fields.Dict()
