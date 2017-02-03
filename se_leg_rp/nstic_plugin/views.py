@@ -35,29 +35,29 @@ blueprints = [nstic_views]
 def authorization_response():
     # parse authentication response
     query_string = request.query_string.decode('utf-8')
-    current_app.logger.debug('query_string: {!s}'.format(query_string))
+    current_app.logger.debug('query_string: {}'.format(query_string))
     authn_resp = current_app.oidc_client.parse_response(AuthorizationResponse, info=query_string,
                                                         sformat='urlencoded')
-    current_app.logger.debug('Authorization response received: {!s}'.format(authn_resp))
+    current_app.logger.debug('Authorization response received: {}'.format(authn_resp))
 
     if authn_resp.get('error'):
-        current_app.logger.error('AuthorizationError {!s} - {!s} ({!s})'.format(request.host, authn_resp['error'],
-                                                                                authn_resp.get('error_message'),
-                                                                                authn_resp.get('error_uri')))
+        current_app.logger.error('AuthorizationError {} - {} ({})'.format(request.host, authn_resp['error'],
+                                                                          authn_resp.get('error_message'),
+                                                                          authn_resp.get('error_uri')))
         return make_response('OK', 200)
 
     user_oidc_state = authn_resp['state']
     proofing_state = current_app.proofing_statedb.get_state_by_oidc_state(user_oidc_state)
     if not proofing_state:
-        msg = 'The \'state\' parameter ({!s}) does not match a user state.'.format(user_oidc_state)
+        msg = 'The \'state\' parameter ({}) does not match a user state.'.format(user_oidc_state)
         current_app.logger.error(msg)
         raise ApiException(payload={'error': msg})
-    current_app.logger.debug('Proofing state {!s} for user {!s} found'.format(proofing_state.state,
-                                                                              proofing_state.eppn))
+    current_app.logger.debug('Proofing state {} for user {} found'.format(proofing_state.state,
+                                                                          proofing_state.eppn))
 
     authorization_header = request.headers.get('Authorization')
     if authorization_header != 'Bearer {}'.format(proofing_state.token):
-        msg = 'The authorization token ({!s}) did not match the expected .'.format(authorization_header)
+        msg = 'The authorization token ({}) did not match the expected .'.format(authorization_header)
         current_app.logger.error(msg)
         raise ApiException(payload={'error': msg})
 
@@ -66,23 +66,23 @@ def authorization_response():
         'code': authn_resp['code'],
         'redirect_uri': current_app.config['AUTHORIZATION_RESPONSE_URI']
     }
-    current_app.logger.debug('Trying to do token request: {!s}'.format(args))
+    current_app.logger.debug('Trying to do token request: {}'.format(args))
     token_resp = current_app.oidc_client.do_access_token_request(scope='openid', state=authn_resp['state'],
                                                                  request_args=args,
                                                                  authn_method='client_secret_basic')
-    current_app.logger.debug('token response received: {!s}'.format(token_resp))
+    current_app.logger.debug('token response received: {}'.format(token_resp))
     id_token = token_resp['id_token']
     if id_token['nonce'] != proofing_state.nonce:
-        current_app.logger.error('The \'nonce\' parameter does not match for user {!s}.'.format(proofing_state.eppn))
-        raise ApiException(payload={'error': 'The \'nonce\' parameter does not match match.'})
+        current_app.logger.error('The \'nonce\' parameter does not match for user {}.'.format(proofing_state.eppn))
+        raise ApiException(payload={'error': 'The \'nonce\' parameter does not match.'})
 
     # do userinfo request
     current_app.logger.debug('Trying to do userinfo request:')
     userinfo = current_app.oidc_client.do_user_info_request(method=current_app.config['USERINFO_ENDPOINT_METHOD'],
                                                             state=authn_resp['state'])
-    current_app.logger.debug('userinfo received: {!s}'.format(userinfo))
+    current_app.logger.debug('userinfo received: {}'.format(userinfo))
     if userinfo['sub'] != id_token['sub']:
-        current_app.logger.error('The \'sub\' of userinfo does not match \'sub\' of ID Token for user {!s}.'.format(
+        current_app.logger.error('The \'sub\' of userinfo does not match \'sub\' of ID Token for user {}.'.format(
             proofing_state.eppn))
         raise ApiException(payload={'The \'sub\' of userinfo does not match \'sub\' of ID Token'})
 
@@ -104,7 +104,7 @@ def authorization_response():
 @marshal_with(schemas.NonceResponseSchema)
 def get_state(**kwargs):
     eppn = mock_auth.authenticate(kwargs)
-    current_app.logger.debug('Getting state for user with eppn {!s}.'.format(eppn))
+    current_app.logger.debug('Getting state for user with eppn {}.'.format(eppn))
     proofing_state = current_app.proofing_statedb.get_state_by_eppn(eppn, raise_on_missing=False)
     if not proofing_state:
         current_app.logger.debug('No proofing state found, initializing new proofing flow.'.format(eppn))
@@ -129,26 +129,26 @@ def get_state(**kwargs):
         try:
             response = requests.post(current_app.oidc_client.authorization_endpoint, data=args)
         except requests.exceptions.ConnectionError as e:
-            msg = 'No connection to authorization endpoint: {!s}'.format(e)
+            msg = 'No connection to authorization endpoint: {}'.format(e)
             current_app.logger.error(msg)
             raise ApiException(payload={'error': msg})
         # If authentication request went well save user state
         if response.status_code == 200:
-            current_app.logger.debug('Authentication request delivered to provider {!s}'.format(
+            current_app.logger.debug('Authentication request delivered to provider {}'.format(
                 current_app.config['PROVIDER_CONFIGURATION_INFO']['issuer']))
             current_app.proofing_statedb.save(proofing_state)
-            current_app.logger.debug('Proofing state {!s} for user {!s} saved'.format(proofing_state.state, eppn))
+            current_app.logger.debug('Proofing state {} for user {} saved'.format(proofing_state.state, eppn))
         else:
             payload = {'error': response.reason, 'message': response.content}
             raise ApiException(status_code=response.status_code, payload=payload)
     # Return nonce and nonce as qr code
-    current_app.logger.debug('Returning nonce for user {!s}'.format(eppn))
+    current_app.logger.debug('Returning nonce for user {}'.format(eppn))
     buf = BytesIO()
     qr_code = '1' + json.dumps({'nonce': proofing_state.nonce, 'token': proofing_state.token})
     qrcode.make(qr_code).save(buf)
     qr_b64 = base64.b64encode(buf.getvalue()).decode()
     ret = {
         'qr_code': qr_code,
-        'qr_img': '<img src="data:image/png;base64, {!s}"/>'.format(qr_b64),
+        'qr_img': '<img src="data:image/png;base64, {}"/>'.format(qr_b64),
     }
     return ret
