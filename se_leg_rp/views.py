@@ -6,7 +6,6 @@ from flask_apispec import use_kwargs, marshal_with
 from oic.exception import PyoidcError
 from operator import itemgetter
 
-import uuid
 from se_leg_rp.exceptions import ApiException
 from se_leg_rp import schemas
 from se_leg_rp import mock_auth
@@ -70,8 +69,7 @@ def get_userinfo(**kwargs):
     try:
         userinfo = current_app.oidc_client.do_user_info_request(method=current_app.config['USERINFO_ENDPOINT_METHOD'],
                                                                 state=proofing_state.state,
-                                                                access_token=proof_data[0].token_resp['access_token'],
-                                                                claims={'data'})
+                                                                access_token=proof_data[0].token_resp['access_token'])
     except PyoidcError as e:
         current_app.logger.error(e)
         # Probably access token expired
