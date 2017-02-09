@@ -36,7 +36,8 @@ def init_oidc_client(app):
         app.logger.critical('No connection to provider {!s}. Can not start without provider configuration.'.format(
             provider))
         raise e
-    return oidc_client
+    app.oidc_client = oidc_client
+    return app
 
 
 def init_logging(app):
@@ -94,18 +95,8 @@ def se_leg_rp_init_app(name, config):
     from .views import rp_views
     app.register_blueprint(rp_views)
 
-    # # TODO: Try flask-registry for this
-    # if app.config['VETTING_METHOD'] == 'se-leg':
-    #     from .se_leg_views.views import se_leg_views
-    #     app.register_blueprint(se_leg_views)
-    # elif app.config['VETTING_METHOD'] == 'nstic':
-    #     from .nstic_views.views import nstic_views
-    #     app.register_blueprint(nstic_views)
-    # else:
-    #     raise NotImplementedError('Please set VETTING_METHOD in config.')
-
     # Initialize the oidc_client after views to be able to set correct redirect_uris
-    app.oidc_client = init_oidc_client(app)
+    app = init_oidc_client(app)
 
     # Initialize db
     app.proofing_statedb = OidcProofingStateDB(app.config['MONGO_URI'])

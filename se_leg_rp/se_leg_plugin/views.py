@@ -11,7 +11,8 @@ import qrcode
 import qrcode.image.svg
 from io import BytesIO
 import base64
-from se_leg_rp.utils import get_unique_hash
+from se_leg_rp.utils import get_unique_hash, check_auth_header, do_initial_token_request, do_authentication_request
+from se_leg_rp.utils import do_initial_userinfo_request, get_user_proofing_state
 from se_leg_rp.exceptions import ApiException
 from eduid_userdb.proofing import OidcProofingState
 from se_leg_rp import schemas
@@ -45,55 +46,26 @@ def authorization_response():
                                                                           authn_resp.get('error_uri')))
         return make_response('OK', 200)
 
-    user_oidc_state = authn_resp['state']
-    proofing_state = current_app.proofing_statedb.get_state_by_oidc_state(user_oidc_state)
-    if not proofing_state:
-        msg = 'The \'state\' parameter ({}) does not match a user state.'.format(user_oidc_state)
-        current_app.logger.error(msg)
-        raise ApiException(payload={'error': msg})
-    current_app.logger.debug('Proofing state {} for user {} found'.format(proofing_state.state,
-                                                                          proofing_state.eppn))
+    # get user proofing state from db
+    proofing_state = get_user_proofing_state(authn_resp['state'])
 
-    authorization_header = request.headers.get('Authorization')
-    if authorization_header != 'Bearer {}'.format(proofing_state.token):
-        msg = 'The authorization token ({}) did not match the expected .'.format(authorization_header)
-        current_app.logger.error(msg)
-        raise ApiException(payload={'error': msg})
+    # Make sure the Bearer Token matches the one generated at authn request time
+    if check_auth_header(proofing_state.token):
+        # Use the authn code to request token information
+        token_resp = do_initial_token_request(authn_resp['code'], authn_resp['state'], proofing_state.nonce)
+        # After receiving a token response the client has stored the grant so we only need to supply
+        # state to load the grant from the client.grant cache.
+        userinfo = do_initial_userinfo_request(authn_resp['state'], token_resp['id_token']['sub'])
 
-    # do token request
-    args = {
-        'code': authn_resp['code'],
-        'redirect_uri': current_app.config['AUTHORIZATION_RESPONSE_URI']
-    }
-    current_app.logger.debug('Trying to do token request: {}'.format(args))
-    token_resp = current_app.oidc_client.do_access_token_request(scope='openid', state=authn_resp['state'],
-                                                                 request_args=args,
-                                                                 authn_method='client_secret_basic')
-    current_app.logger.debug('token response received: {}'.format(token_resp))
-    id_token = token_resp['id_token']
-    if id_token['nonce'] != proofing_state.nonce:
-        current_app.logger.error('The \'nonce\' parameter does not match for user {}.'.format(proofing_state.eppn))
-        raise ApiException(payload={'error': 'The \'nonce\' parameter does not match.'})
+        # Save proof
+        proof_data = {
+            'eduPersonPrincipalName': proofing_state.eppn,
+            'authn_resp': authn_resp.to_dict(),
+            'token_resp': token_resp.to_dict(),
+            'userinfo': userinfo.to_dict()
+        }
 
-    # do userinfo request
-    current_app.logger.debug('Trying to do userinfo request:')
-    userinfo = current_app.oidc_client.do_user_info_request(method=current_app.config['USERINFO_ENDPOINT_METHOD'],
-                                                            state=authn_resp['state'])
-    current_app.logger.debug('userinfo received: {}'.format(userinfo))
-    if userinfo['sub'] != id_token['sub']:
-        current_app.logger.error('The \'sub\' of userinfo does not match \'sub\' of ID Token for user {}.'.format(
-            proofing_state.eppn))
-        raise ApiException(payload={'The \'sub\' of userinfo does not match \'sub\' of ID Token'})
-
-    # Save proof
-    proof_data = {
-        'eduPersonPrincipalName': proofing_state.eppn,
-        'authn_resp': authn_resp.to_dict(),
-        'token_resp': token_resp.to_dict(),
-        'userinfo': userinfo.to_dict()
-    }
-
-    current_app.proofdb.save(Proof(data=proof_data))
+        current_app.proofdb.save(Proof(data=proof_data))
 
     # Remove users proofing state
     current_app.proofing_statedb.remove_state(proofing_state)
@@ -114,33 +86,15 @@ def get_state(**kwargs):
         token = get_unique_hash()
         proofing_state = OidcProofingState({'eduPersonPrincipalName': eppn, 'state': state, 'nonce': nonce,
                                             'token': token})
+        claims_request = ClaimsRequest(userinfo=Claims(identity=None))
         # Initiate proofing
-        args = {
-            'client_id': current_app.oidc_client.client_id,
-            'response_type': 'code',
-            'scope': ['openid'],
-            'redirect_uri': current_app.config['AUTHORIZATION_RESPONSE_URI'],
-            'state': state,
-            'nonce': nonce,
-            'claims': ClaimsRequest(userinfo=Claims(identity=None)).to_json()
-        }
-        current_app.logger.debug('AuthenticationRequest args:')
-        current_app.logger.debug(args)
-        try:
-            response = requests.post(current_app.oidc_client.authorization_endpoint, data=args)
-        except requests.exceptions.ConnectionError as e:
-            msg = 'No connection to authorization endpoint: {}'.format(e)
-            current_app.logger.error(msg)
-            raise ApiException(payload={'error': msg})
-        # If authentication request went well save user state
-        if response.status_code == 200:
-            current_app.logger.debug('Authentication request delivered to provider {}'.format(
-                current_app.config['PROVIDER_CONFIGURATION_INFO']['issuer']))
-            current_app.proofing_statedb.save(proofing_state)
-            current_app.logger.debug('Proofing state {} for user {} saved'.format(proofing_state.state, eppn))
-        else:
+        response = do_authentication_request(state, nonce, token, claims_request)
+        if response.status_code != 200:
             payload = {'error': response.reason, 'message': response.content}
             raise ApiException(status_code=response.status_code, payload=payload)
+        # If authentication request went well save user state
+        current_app.proofing_statedb.save(proofing_state)
+        current_app.logger.debug('Proofing state {} for user {} saved'.format(proofing_state.state, eppn))
     # Return nonce and nonce as qr code
     current_app.logger.debug('Returning nonce for user {}'.format(eppn))
     buf = BytesIO()
