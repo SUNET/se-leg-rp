@@ -1,4 +1,4 @@
--i https://pypi.nordu.net/simple
+-i https://pypi.sunet.se/simple
 Flask<0.12
 Flask-Registry==0.2.0
 requests<2.12
