@@ -86,7 +86,7 @@ def get_state(**kwargs):
         token = get_unique_hash()
         proofing_state = OidcProofingState({'eduPersonPrincipalName': eppn, 'state': state, 'nonce': nonce,
                                             'token': token})
-        claims_request = ClaimsRequest(userinfo=Claims(identity=None))
+        claims_request = ClaimsRequest(userinfo=Claims(identity=None, vetting_time=None, metadata=None))
         # Initiate proofing
         response = do_authentication_request(state, nonce, token, claims_request)
         if response.status_code != 200:
