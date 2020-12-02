@@ -4,6 +4,6 @@ Flask-Registry==0.2.0
 requests<2.12
 eduid-userdb==0.2.4b0
 flask-apispec>=0.3.2
-oic==0.8.3
+oic==1.2.1
 Pillow>=3.0.0
 qrcode>=5.1
